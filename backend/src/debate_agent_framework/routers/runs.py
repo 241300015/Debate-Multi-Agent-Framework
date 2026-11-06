@@ -4,8 +4,8 @@ import asyncio
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 
-from debate_agent_framework.schemas import DebateReviewInput, RunSubmissionResponse, StudentTaskResponse
-from debate_agent_framework.services.jobs import RunSnapshot, RunStatus
+from ..schemas import DebateReviewInput, RunSubmissionResponse, StudentTaskResponse
+from ..services.jobs import RunSnapshot, RunStatus
 
 from ..persistence import PortalRepository
 from ..services import DebateWorkflowService

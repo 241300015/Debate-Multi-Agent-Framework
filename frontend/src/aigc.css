@@ -239,6 +239,38 @@
 .aigc-score span {
   font-size: 10px;
 }
+.aigc-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-shrink: 0;
+  margin-left: 16px;
+}
+.aigc-export-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #fff;
+  color: #4a1655;
+  border: none;
+  border-radius: 8px;
+  padding: 9px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.15s;
+  white-space: nowrap;
+}
+.aigc-export-btn:hover {
+  background: #f1bf5a;
+  color: #4a1655;
+  transform: translateY(-1px);
+}
+.aigc-export-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
 .aigc-disclaimer {
   display: flex;
   gap: 11px;
@@ -288,6 +320,13 @@
 }
 .aigc-metrics strong.high {
   color: #b5424f;
+}
+.aigc-metrics strong.warn {
+  color: #c05621;
+}
+.aigc-table-wrap td.warn {
+  color: #c05621;
+  font-weight: 600;
 }
 .aigc-section {
   background: #fff;

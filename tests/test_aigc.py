@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 from debate_agent_framework.aigc.aggregation import aggregate_results
 from debate_agent_framework.aigc.preprocessing import AigcWindowBuilder, PREPROCESSING_VERSION
+from debate_agent_framework.aigc.schemas import AigcDetectionResult
 from debate_agent_framework.main import create_app
 from debate_agent_framework.schemas import (
     BoundingBox,
@@ -125,7 +126,77 @@ def test_aigc_aggregation_reports_weighted_risk_distribution() -> None:
     assert result.high_risk_ratio > 0
     assert result.average_risk_score < 1
     assert result.calibrated is False
+    assert 0 <= result.suspicious_ratio <= 1
+    assert result.suspicious_threshold == 0.3
     assert "不能单独作为" in result.disclaimer
+
+
+def _fake_detector_result() -> AigcDetectionResult:
+    segments = AigcWindowBuilder(target_tokens=120, min_tokens=20, max_tokens=150).build(
+        review_input(), CharacterDetector()
+    )
+    probabilities = CharacterDetector().predict_probabilities([item.text for item in segments])
+    return aggregate_results(
+        segments,
+        probabilities,
+        model_id="test-detector",
+        model_revision=None,
+        preprocessing_version=PREPROCESSING_VERSION,
+        medium_threshold=0.5,
+        high_threshold=0.8,
+        suspicious_threshold=0.1,
+    )
+
+
+def test_aigc_report_export_returns_pdf(monkeypatch, tmp_path) -> None:  # type: ignore[no-untyped-def]
+    import debate_agent_framework.aigc.service as service_module
+
+    class FakeMinerUClient:
+        def __init__(self, config) -> None:  # type: ignore[no-untyped-def]
+            pass
+
+        async def parse_pdf(self, pdf_path, *, output_root):  # type: ignore[no-untyped-def]
+            output_root.mkdir(parents=True, exist_ok=True)
+            return MinerUParseResult(
+                batch_id="aigc-batch",
+                markdown="# AIGC测试",
+                output_dir=str(output_root),
+                markdown_path=str(output_root / "full.md"),
+            )
+
+    monkeypatch.setenv("DEBATE_AIGC_ENABLED", "true")
+    monkeypatch.setenv("DEBATE_MINERU_TOKEN", "test-token")
+    monkeypatch.setattr(service_module, "MinerUClient", FakeMinerUClient)
+    with TestClient(create_app()) as client:
+        service = client.app.state.aigc_detection_service
+        service.detector = CharacterDetector()
+        service.mineru_client_factory = FakeMinerUClient
+
+        response = client.post(
+            "/api/debate/aigc/tasks",
+            files={"pdf": ("paper.pdf", b"%PDF-1.7\ntest", "application/pdf")},
+        )
+        assert response.status_code == 202
+        created = response.json()
+        task_id = created["task_id"]
+        access_code = created["access_code"]
+
+        # 未鉴权应拒绝
+        assert client.get(f"/api/debate/aigc/tasks/{task_id}/report").status_code == 403
+
+        # 检测成功（后台任务已执行完成）后导出 PDF
+        exported = client.get(
+            f"/api/debate/aigc/tasks/{task_id}/report",
+            headers={"X-AIGC-Access-Code": access_code},
+        )
+        assert exported.status_code == 200
+        assert exported.headers["content-type"] == "application/pdf"
+        assert exported.content.startswith(b"%PDF-")
+        # 清理
+        client.delete(
+            f"/api/debate/aigc/tasks/{task_id}",
+            headers={"X-AIGC-Access-Code": access_code},
+        )
 
 
 def test_standalone_aigc_api_requires_access_code(monkeypatch, tmp_path) -> None:  # type: ignore[no-untyped-def]

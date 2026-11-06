@@ -47,3 +47,8 @@ finetuning/models/*
 
 # 防误从 backend 目录启动导致重复建库
 backend/backend/
+
+# Local packaging / runtime artifacts
+/ruiwen-zhiping-source.zip
+/.backend.pid
+/.frontend.pid

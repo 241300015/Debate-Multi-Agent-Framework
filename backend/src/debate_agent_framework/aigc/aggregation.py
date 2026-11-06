@@ -21,6 +21,7 @@ def aggregate_results(
     preprocessing_version: str,
     medium_threshold: float,
     high_threshold: float,
+    suspicious_threshold: float = 0.3,
 ) -> AigcDetectionResult:
     if not segments:
         raise ValueError("No valid body text was available for AIGC detection")
@@ -53,6 +54,9 @@ def aggregate_results(
             average_risk_score=_weighted_average(items),
             medium_risk_ratio=_ratio(items, AigcRiskLevel.MEDIUM),
             high_risk_ratio=_ratio(items, AigcRiskLevel.HIGH),
+            suspicious_ratio=_prob_ratio(
+                items, suspicious_threshold,
+            ),
         )
         for key, items in groups.items()
     ]
@@ -61,11 +65,13 @@ def aggregate_results(
         model_id=model_id,
         model_revision=model_revision,
         preprocessing_version=preprocessing_version,
+        suspicious_threshold=suspicious_threshold,
         segment_count=len(results),
         token_count=total_tokens,
         average_risk_score=_weighted_average(results),
         medium_risk_ratio=_ratio(results, AigcRiskLevel.MEDIUM),
         high_risk_ratio=_ratio(results, AigcRiskLevel.HIGH),
+        suspicious_ratio=_prob_ratio(results, suspicious_threshold),
         chapters=chapters,
         segments=results,
     )
@@ -92,5 +98,27 @@ def _ratio(items: Sequence[AigcSegmentResult], level: AigcRiskLevel) -> float:
         return 0.0
     return round(
         sum(item.token_count for item in items if item.risk_level is level) / tokens,
+        6,
+    )
+
+
+def _prob_ratio(
+    items: Sequence[AigcSegmentResult], threshold: float
+) -> float:
+    """计算“疑似 AI”占比：ai_probability ≥ threshold 的 token 占总 token 比例。
+
+    独立于 medium/high 的风险等级，用于对齐“按概率阈值切疑似片段”的口径
+    （例如与知网结果对比）。
+    """
+    tokens = sum(item.token_count for item in items)
+    if not tokens:
+        return 0.0
+    return round(
+        sum(
+            item.token_count
+            for item in items
+            if item.ai_probability >= threshold
+        )
+        / tokens,
         6,
     )

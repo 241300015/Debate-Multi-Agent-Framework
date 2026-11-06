@@ -11,7 +11,7 @@ from typing import Sequence
 
 from backend.env import ModelClientError
 from backend.env.loadenv import load_env_file
-from debate_agent_framework.core.errors import WorkflowExecutionError
+from ..core.errors import WorkflowExecutionError
 from .schemas import DebateReviewInput
 from .workflows import build_workflow
 

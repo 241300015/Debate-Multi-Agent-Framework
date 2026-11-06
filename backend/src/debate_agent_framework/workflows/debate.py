@@ -16,7 +16,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
 from pydantic import ValidationError
 
-from debate_agent_framework.core.errors import WorkflowExecutionError
+from ..core.errors import WorkflowExecutionError
 
 from backend.env import ModelClient, ModelClientError, build_model_client
 

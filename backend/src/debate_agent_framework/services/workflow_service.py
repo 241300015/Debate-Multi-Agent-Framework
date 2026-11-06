@@ -5,13 +5,13 @@ from __future__ import annotations
 import asyncio
 from typing import Any, Protocol
 
-from debate_agent_framework.schemas import DebateReviewInput
-from debate_agent_framework.services.jobs import (
+from ..schemas import DebateReviewInput
+from ..services.jobs import (
     InMemoryRunStore,
     RunSnapshot,
     RunStageStatus,
 )
-from debate_agent_framework.workflows import DebateWorkflow, build_workflow
+from ..workflows import DebateWorkflow, build_workflow
 
 
 class RunStore(Protocol):

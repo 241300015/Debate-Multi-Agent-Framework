@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   ChevronRight,
   Clock3,
+  Download,
   FileSearch,
   FileText,
   History,
@@ -21,6 +22,7 @@ import {
   StoredAigcTask,
   createAigcTask,
   deleteAigcTask,
+  exportAigcReport,
   getAigcAvailability,
   getAigcTask,
   loadAigcTasks,
@@ -129,6 +131,20 @@ export default function AigcDetectionPage() {
       setError('');
     } catch (err) {
       setError(err instanceof Error ? err.message : '重试失败');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const exportReport = async () => {
+    if (!selected) return;
+    setBusy(true);
+    setError('');
+    try {
+      await exportAigcReport(selected);
+      setError('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '导出失败');
     } finally {
       setBusy(false);
     }
@@ -248,19 +264,25 @@ export default function AigcDetectionPage() {
             <>
               <div className="aigc-result-head">
                 <div><span>检测报告</span><h2>{snapshot.source_filename}</h2><p><Clock3 size={13} />完成于 {new Date(snapshot.completed_at || snapshot.updated_at).toLocaleString()}</p></div>
-                <div className="aigc-score"><strong>{percent(snapshot.result.average_risk_score)}</strong><span>平均风险值</span></div>
+                <div className="aigc-head-actions">
+                  <button className="aigc-export-btn" onClick={exportReport} disabled={busy}>
+                    <Download size={15} />{busy ? '生成中…' : '导出 PDF 报告'}
+                  </button>
+                  <div className="aigc-score"><strong>{percent(snapshot.result.suspicious_ratio)}</strong><span>疑似 AI 占比</span></div>
+                </div>
               </div>
               <div className="aigc-disclaimer"><AlertTriangle size={18} /><p><b>辅助筛查，不是鉴定结论</b>{snapshot.result.disclaimer} 当前模型输出未经本项目数据校准。</p></div>
               <div className="aigc-metrics">
                 <div><span>文本窗口</span><strong>{snapshot.result.segment_count}</strong><small>{snapshot.result.token_count.toLocaleString()} tokens</small></div>
+                <div><span>疑似 AI 占比</span><strong className="warn">{percent(snapshot.result.suspicious_ratio)}</strong><small>概率 ≥ {percent(snapshot.result.suspicious_threshold)}（可对标知网口径）</small></div>
                 <div><span>中风险文本占比</span><strong className="medium">{percent(snapshot.result.medium_risk_ratio)}</strong><small>按 token 加权</small></div>
                 <div><span>高风险文本占比</span><strong className="high">{percent(snapshot.result.high_risk_ratio)}</strong><small>按 token 加权</small></div>
               </div>
 
               <section className="aigc-section">
                 <div className="aigc-section-title"><div><b>章节分布</b><span>模型概率按有效 token 加权汇总</span></div></div>
-                <div className="aigc-table-wrap"><table><thead><tr><th>章节</th><th>窗口</th><th>平均风险</th><th>中风险占比</th><th>高风险占比</th></tr></thead><tbody>
-                  {snapshot.result.chapters.map((chapter, index) => <tr key={`${chapter.chapter_id}-${index}`}><td>{chapter.chapter_name}</td><td>{chapter.segment_count}</td><td>{percent(chapter.average_risk_score)}</td><td>{percent(chapter.medium_risk_ratio)}</td><td>{percent(chapter.high_risk_ratio)}</td></tr>)}
+                <div className="aigc-table-wrap"><table><thead><tr><th>章节</th><th>窗口</th><th>平均风险</th><th>疑似 AI 占比</th><th>中风险占比</th><th>高风险占比</th></tr></thead><tbody>
+                  {snapshot.result.chapters.map((chapter, index) => <tr key={`${chapter.chapter_id}-${index}`}><td>{chapter.chapter_name}</td><td>{chapter.segment_count}</td><td>{percent(chapter.average_risk_score)}</td><td className="warn">{percent(chapter.suspicious_ratio)}</td><td>{percent(chapter.medium_risk_ratio)}</td><td>{percent(chapter.high_risk_ratio)}</td></tr>)}
                 </tbody></table></div>
               </section>
 

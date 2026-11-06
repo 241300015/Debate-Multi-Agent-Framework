@@ -129,6 +129,7 @@ class AigcDetectionService:
                     preprocessing_version=PREPROCESSING_VERSION,
                     medium_threshold=self.config.medium_threshold,
                     high_threshold=self.config.high_threshold,
+                    suspicious_threshold=self.config.suspicious_threshold,
                 )
                 (task_dir / "result.json").write_text(
                     json.dumps(result.model_dump(mode="json"), ensure_ascii=False, indent=2),

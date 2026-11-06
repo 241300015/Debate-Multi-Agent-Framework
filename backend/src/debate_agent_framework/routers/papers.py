@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import tempfile
 from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Request, UploadFile
+
+from backend.env import build_model_client
 
 from ..ingestion import (
     InvalidPdfError,
@@ -112,7 +115,16 @@ async def parse_and_review_paper(
                 pdf_path,
                 output_root=output_root,
             )
-            review_input = MarkdownPaperParser().parse(
+            llm_split_enabled_env = os.getenv("DEBATE_LLM_CHAPTER_SPLIT", "0")
+            llm_split_enabled = llm_split_enabled_env.strip().lower() not in {
+                "0", "false", "no", "off",
+            }
+            parser = (
+                MarkdownPaperParser(model_client=build_model_client())
+                if llm_split_enabled
+                else MarkdownPaperParser()
+            )
+            review_input = parser.parse(
                 parsed.markdown,
                 paper_type=paper_type,
                 paper_id=paper_id,

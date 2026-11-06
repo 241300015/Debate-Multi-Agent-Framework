@@ -62,6 +62,7 @@ class AigcChapterSummary(AigcModel):
     average_risk_score: float = Field(ge=0.0, le=1.0)
     medium_risk_ratio: float = Field(ge=0.0, le=1.0)
     high_risk_ratio: float = Field(ge=0.0, le=1.0)
+    suspicious_ratio: float = Field(default=0.0, ge=0.0, le=1.0)
 
 
 class AigcDetectionResult(AigcModel):
@@ -69,6 +70,7 @@ class AigcDetectionResult(AigcModel):
     model_revision: str | None = None
     preprocessing_version: str
     calibrated: bool = False
+    suspicious_threshold: float = Field(default=0.3, ge=0.0, le=1.0)
     disclaimer: str = (
         "检测结果仅用于辅助筛查，不能单独作为认定 AI 生成或学术不端的依据。"
     )
@@ -77,6 +79,7 @@ class AigcDetectionResult(AigcModel):
     average_risk_score: float = Field(ge=0.0, le=1.0)
     medium_risk_ratio: float = Field(ge=0.0, le=1.0)
     high_risk_ratio: float = Field(ge=0.0, le=1.0)
+    suspicious_ratio: float = Field(default=0.0, ge=0.0, le=1.0)
     chapters: list[AigcChapterSummary] = Field(default_factory=list)
     segments: list[AigcSegmentResult] = Field(default_factory=list)
 

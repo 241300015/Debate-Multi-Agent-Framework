@@ -34,6 +34,7 @@ export type AigcChapterSummary = {
   average_risk_score: number;
   medium_risk_ratio: number;
   high_risk_ratio: number;
+  suspicious_ratio: number;
 };
 
 export type AigcDetectionResult = {
@@ -41,12 +42,14 @@ export type AigcDetectionResult = {
   model_revision?: string | null;
   preprocessing_version: string;
   calibrated: boolean;
+  suspicious_threshold: number;
   disclaimer: string;
   segment_count: number;
   token_count: number;
   average_risk_score: number;
   medium_risk_ratio: number;
   high_risk_ratio: number;
+  suspicious_ratio: number;
   chapters: AigcChapterSummary[];
   segments: AigcSegmentResult[];
 };
@@ -130,6 +133,30 @@ export async function retryAigcTask(task: StoredAigcTask): Promise<AigcTaskSnaps
   );
   if (!response.ok) throw await responseError(response, '重试 AIGC 检测任务失败');
   return response.json();
+}
+
+export async function exportAigcReport(task: StoredAigcTask): Promise<void> {
+  const response = await fetch(
+    `/api/debate/aigc/tasks/${encodeURIComponent(task.taskId)}/report`,
+    { headers: { 'X-AIGC-Access-Code': task.accessCode } },
+  );
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    throw new Error(payload?.detail || '导出 AIGC 报告失败');
+  }
+  const blob = await response.blob();
+  const disposition = response.headers.get('Content-Disposition') || '';
+  const nameMatch = disposition.match(/filename\*=UTF-8''([^;]+)/);
+  const fallbackMatch = disposition.match(/filename="([^"]+)"/);
+  const filename = nameMatch?.[1] || fallbackMatch?.[1] || 'AIGC检测报告.pdf';
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = decodeURIComponent(filename);
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
 }
 
 export async function deleteAigcTask(task: StoredAigcTask): Promise<void> {

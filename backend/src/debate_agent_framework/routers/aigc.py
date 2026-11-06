@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import asyncio
+
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Header, HTTPException, Response, UploadFile
+from fastapi.responses import Response as FastAPIResponse
 
 from ..aigc import AigcDetectionService, AigcTaskCreated, AigcTaskSnapshot
 from ..aigc.schemas import AigcAvailability
+from ..services.aigc_report_generator import generate_aigc_pdf
 from .dependencies import get_aigc_detection_service
 
 router = APIRouter(prefix="/aigc", tags=["aigc-screening"])
@@ -73,6 +77,41 @@ async def get_task(
     if snapshot is None:
         raise HTTPException(status_code=404, detail="AIGC task does not exist")
     return snapshot
+
+
+@router.get("/tasks/{task_id}/report", response_class=FastAPIResponse)
+async def export_task_report(
+    task_id: str,
+    x_aigc_access_code: str | None = Header(None, alias="X-AIGC-Access-Code"),
+    service: AigcDetectionService = Depends(get_aigc_detection_service),
+) -> FastAPIResponse:
+    """导出 AIGC 检测报告 PDF。"""
+    _authorize(task_id, x_aigc_access_code, service)
+    snapshot = service.repository.get(task_id)
+    if snapshot is None:
+        raise HTTPException(status_code=404, detail="AIGC task does not exist")
+    if snapshot.status != "succeeded" or snapshot.result is None:
+        raise HTTPException(status_code=409, detail="报告尚未就绪，检测未成功完成")
+    try:
+        pdf_bytes = await asyncio.to_thread(
+            generate_aigc_pdf, snapshot.source_filename, snapshot.result
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"生成 AIGC 报告失败: {exc}") from exc
+    base = snapshot.source_filename.rsplit(".", 1)[0] or snapshot.source_filename
+    filename = f"{base}_AIGC检测报告.pdf"
+    from urllib.parse import quote
+
+    return FastAPIResponse(
+        content=pdf_bytes.getvalue(),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": (
+                f"attachment; filename=\"{quote(filename)}\"; "
+                f"filename*=UTF-8''{quote(filename)}"
+            ),
+        },
+    )
 
 
 @router.post("/tasks/{task_id}/retry", response_model=AigcTaskSnapshot, status_code=202)

@@ -409,7 +409,7 @@ export default function TaskDetailPage() {
     <div className="report-page">
       <header className="report-bar">
         <Link to="/student"><ChevronLeft />返回任务列表</Link>
-        <div className="report-brand"><span>南京大学</span> 衡文云审</div>
+        <div className="report-brand"><span>南京大学</span> 睿文智评</div>
         <span>评审报告</span>
       </header>
 

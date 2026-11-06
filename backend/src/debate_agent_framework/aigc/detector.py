@@ -23,6 +23,7 @@ class AigcDetectorConfig:
     local_files_only: bool = False
     medium_threshold: float = 0.5
     high_threshold: float = 0.8
+    suspicious_threshold: float = 0.3
 
     @classmethod
     def from_env(cls) -> "AigcDetectorConfig":
@@ -44,6 +45,9 @@ class AigcDetectorConfig:
             == "true",
             medium_threshold=float(os.getenv("DEBATE_AIGC_MEDIUM_THRESHOLD", "0.5")),
             high_threshold=float(os.getenv("DEBATE_AIGC_HIGH_THRESHOLD", "0.8")),
+            suspicious_threshold=float(
+                os.getenv("DEBATE_AIGC_SUSPICIOUS_THRESHOLD", "0.3")
+            ),
         )
 
     def __post_init__(self) -> None:
@@ -51,6 +55,8 @@ class AigcDetectorConfig:
             raise ValueError("DEBATE_AIGC_BATCH_SIZE must be positive")
         if not 0 <= self.medium_threshold < self.high_threshold <= 1:
             raise ValueError("AIGC risk thresholds are invalid")
+        if not 0 <= self.suspicious_threshold <= 1:
+            raise ValueError("DEBATE_AIGC_SUSPICIOUS_THRESHOLD must be in [0,1]")
 
 
 class HuggingFaceAigcDetector:
