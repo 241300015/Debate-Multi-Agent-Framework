@@ -104,6 +104,25 @@ def latex_escape(text: str) -> str:
     return "".join(_LATEX_SPECIALS.get(char, char) for char in str(text))
 
 
+def _wrappable_text(text: str) -> str:
+    """Preserve paragraphs and let long identifiers wrap without changing text."""
+
+    def escape_line(line: str) -> str:
+        parts: list[str] = []
+        position = 0
+        for match in re.finditer(r"[!-~]{16,}", line):
+            parts.append(latex_escape(line[position:match.start()]))
+            parts.append(
+                r"\allowbreak{}".join(latex_escape(char) for char in match.group())
+            )
+            position = match.end()
+        parts.append(latex_escape(line[position:]))
+        return "".join(parts)
+
+    lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    return r"\par ".join(escape_line(line) for line in lines)
+
+
 @dataclass(frozen=True)
 class ReviewTableEntry:
     index: int
@@ -164,6 +183,7 @@ _DOCUMENT_TEMPLATE = r"""\documentclass[UTF8]{article}
 \usepackage{xcolor}
 \usepackage{datetime}
 \usepackage{advdate}
+\usepackage[breakable,skins]{tcolorbox}
 
 % ===== 统一命名的占位符 =====
 \newcommand{\studentid}{@STUDENT_ID@}  % 学号
@@ -185,14 +205,12 @@ _DOCUMENT_TEMPLATE = r"""\documentclass[UTF8]{article}
 % 设置水印样式
 \definecolor{watermark}{gray}{0.75}
 \newcommand{\watermarktext}{
-    \raisebox{1.5\baselineskip}{
-        \parbox{\textwidth}{
-            \centering
-            \textcolor{watermark}{%
-                \fontsize{12}{12}\selectfont%
-                本报告由睿文智评AI预审评估系统通过大语言模型生成，需人工复核后使用，不能直接作为最终评价\\%
-                生成时间为 \today\ \currenttime，用户名为 \username %
-            }%
+    \parbox[b]{\textwidth}{
+        \centering
+        \textcolor{watermark}{%
+            \fontsize{9}{12}\selectfont%
+            本报告由睿文智评AI预审评估系统通过大语言模型生成，需人工复核后使用，不能直接作为最终评价\\%
+            生成时间为 \today\ \currenttime，用户名为 \username %
         }%
     }%
 }
@@ -206,7 +224,10 @@ _DOCUMENT_TEMPLATE = r"""\documentclass[UTF8]{article}
 \fancyfoot[R]{}
 
 \newcolumntype{C}[1]{>{\centering\arraybackslash}p{#1}}
-\geometry{a4paper, left=0.5cm, right=0.5cm, top=1.5cm, bottom=1.5cm}
+\geometry{a4paper, left=0.5cm, right=0.5cm, top=1.5cm, bottom=2.5cm, footskip=1.2cm}
+\setlength{\headwidth}{\textwidth}
+\newlength{\reviewtablewidth}
+\newlength{\reviewcriteriawidth}
 
 \begin{document}
 
@@ -221,41 +242,44 @@ _DOCUMENT_TEMPLATE = r"""\documentclass[UTF8]{article}
 
 \vspace*{1cm}
 
-\centering
 \setlength{\tabcolsep}{3pt}
 \renewcommand{\arraystretch}{1.5}
+% Include cell padding and rules so merged cells and continuation frames align.
+\setlength{\reviewtablewidth}{\dimexpr17.07cm+9\tabcolsep+9\arrayrulewidth\relax}
+\setlength{\reviewcriteriawidth}{\dimexpr11.28cm+4\tabcolsep+2\arrayrulewidth\relax}
+\begin{center}
 \begin{tabular}{|@{}>{}p{2.23cm}@{}|p{5.6cm}|p{2.72cm}|p{2.96cm}|@{}*{4}{>{\centering\arraybackslash}p{0.89cm}@{}|}}
     \hline
-    学号 & \studentid & 姓名 & \multicolumn{5}{c|}{\studentname} \\
+    学号 & \studentid & 姓名 & \multicolumn{5}{p{\dimexpr6.52cm+3\tabcolsep+4\arrayrulewidth\relax}|}{\centering\arraybackslash\studentname} \\
     \hline
-    论文题目 & \multicolumn{7}{c|}{\papertitle} \\
+    论文题目 & \multicolumn{7}{p{\dimexpr14.84cm+7\tabcolsep+6\arrayrulewidth\relax}|}{\centering\arraybackslash\papertitle} \\
     \hline
     \multicolumn{8}{|c|}{请参照评分标准，对论文打分}  \\
     \hline
     评议项目 & \multicolumn{3}{|c|}{评分标准} & 优秀 & 良好 & 一般 & 较差 \\
     \hline
     \multirow{6}{*}{论文格式}
-    & \multicolumn{3}{p{11.28cm}|}{顺序：封面-承诺书-摘要（中、英文）-目录-正文-参考文献-致谢-附录完备，承诺书签名} &
+    & \multicolumn{3}{p{\reviewcriteriawidth}|}{顺序：封面-承诺书-摘要（中、英文）-目录-正文-参考文献-致谢-附录完备，承诺书签名} &
     \formatScoreOneA & \formatScoreOneB & \formatScoreOneC & \formatScoreOneD \\
     \cline{2-8}
-    & \multicolumn{3}{p{11.28cm}|}{摘要内容以300—600字为宜，摘要与关键词应在同一页；
+    & \multicolumn{3}{p{\reviewcriteriawidth}|}{摘要内容以300—600字为宜，摘要与关键词应在同一页；
 
     关键词一般 3—5 个，摘要关键词用"；"分开；
 
     英文摘要和关键词内容与中文摘要和关键词相一致，其中英文摘要以约 300 个实词为宜} &
     \formatScoreTwoA & \formatScoreTwoB & \formatScoreTwoC & \formatScoreTwoD \\
     \cline{2-8}
-    & \multicolumn{3}{p{11.28cm}|}{论文目录要求标题层次清晰，目录中的标题要与正文中的标题一致} &
+    & \multicolumn{3}{p{\reviewcriteriawidth}|}{论文目录要求标题层次清晰，目录中的标题要与正文中的标题一致} &
     \formatScoreThreeA & \formatScoreThreeB & \formatScoreThreeC & \formatScoreThreeD \\
     \cline{2-8}
-    & \multicolumn{3}{p{11.28cm}|}{主体部分一般从引言（绪论）开始，以结论或讨论结束，其中引言（绪论）应独立成章；
+    & \multicolumn{3}{p{\reviewcriteriawidth}|}{主体部分一般从引言（绪论）开始，以结论或讨论结束，其中引言（绪论）应独立成章；
 
     主体部分每一章应另起页，一般不少于 15000 字或相当信息量（包括图表）；
 
     图表、公式注意格式和编号，表的题目在表的上方，图的题目在图的下方，格式"表/图 1-3"，公式（1-3），表和图按各自顺序分开编号} &
     \formatScoreFourA & \formatScoreFourB & \formatScoreFourC & \formatScoreFourD \\
     \cline{2-8}
-    & \multicolumn{3}{p{11.28cm}|}{参考文献表应置于正文后并另起页；
+    & \multicolumn{3}{p{\reviewcriteriawidth}|}{参考文献表应置于正文后并另起页；
 
     所有被引用文献均要列入参考文献表中；
 
@@ -264,44 +288,45 @@ _DOCUMENT_TEMPLATE = r"""\documentclass[UTF8]{article}
     文中上标，页面脚注，参考文献格式符合学术标准，左顶格，[1]格式标记} &
     \formatScoreFiveA & \formatScoreFiveB & \formatScoreFiveC & \formatScoreFiveD \\
     \cline{2-8}
-    & \multicolumn{3}{p{11.28cm}|}{谢辞应以简短的文字表示自己的谢意，内容限一页。} &
+    & \multicolumn{3}{p{\reviewcriteriawidth}|}{谢辞应以简短的文字表示自己的谢意，内容限一页。} &
     \formatScoreSixA & \formatScoreSixB & \formatScoreSixC & \formatScoreSixD \\
     \hline
 
     \multirow{3}{*}{论文选题}
-    & \multicolumn{3}{p{11.28cm}|}{符合本学科专业培养目标，达到科学研究和实践能力培养的目的} &
+    & \multicolumn{3}{p{\reviewcriteriawidth}|}{符合本学科专业培养目标，达到科学研究和实践能力培养的目的} &
     \topicScoreOneA & \topicScoreOneB & \topicScoreOneC & \topicScoreOneD \\
     \cline{2-8}
-    & \multicolumn{3}{p{11.28cm}|}{满足专业培养方案中对素质、能力和知识结构的要求，工作量适当} &
+    & \multicolumn{3}{p{\reviewcriteriawidth}|}{满足专业培养方案中对素质、能力和知识结构的要求，工作量适当} &
     \topicScoreTwoA & \topicScoreTwoB & \topicScoreTwoC & \topicScoreTwoD \\
     \cline{2-8}
-    & \multicolumn{3}{p{11.28cm}|}{选题符合本学科专业的发展，具有一定的科技或应用的参考价值} &
+    & \multicolumn{3}{p{\reviewcriteriawidth}|}{选题符合本学科专业的发展，具有一定的科技或应用的参考价值} &
     \topicScoreThreeA & \topicScoreThreeB & \topicScoreThreeC & \topicScoreThreeD \\
     \hline
 
     \multirow{2}{*}{论文水平}
-    & \multicolumn{3}{p{11.28cm}|}{基本掌握检索中外文献资料的方法，对资料进行初步分析、综合、归纳等整理，并能适当应用。} &
+    & \multicolumn{3}{p{\reviewcriteriawidth}|}{基本掌握检索中外文献资料的方法，对资料进行初步分析、综合、归纳等整理，并能适当应用。} &
     \levelScoreOneA & \levelScoreOneB & \levelScoreOneC & \levelScoreOneD \\
     \cline{2-8}
-    & \multicolumn{3}{p{11.28cm}|}{能够综合应用所学知识，对课题所研究问题进行分析，研究目标明确，内容具体，且具有一定的深度。} &
+    & \multicolumn{3}{p{\reviewcriteriawidth}|}{能够综合应用所学知识，对课题所研究问题进行分析，研究目标明确，内容具体，且具有一定的深度。} &
     \levelScoreTwoA & \levelScoreTwoB & \levelScoreTwoC & \levelScoreTwoD \\
     \hline
 \end{tabular}
+\end{center}
 
-
-\centering
+\newpage
+\begin{center}
 \setlength{\tabcolsep}{3pt}
 \renewcommand{\arraystretch}{1.5}
 \begin{tabular}{|@{}>{}p{2.23cm}@{}|p{5.6cm}|p{2.72cm}|p{2.96cm}|@{}*{4}{>{\centering\arraybackslash}p{0.89cm}@{}|}}
     \hline
     \multirow{4}{*}{}
-    & \multicolumn{3}{p{11.28cm}|}{较熟练运用本专业设计或研究的方法、手段和工具开展课题的设计与研究工作} &
+    & \multicolumn{3}{p{\reviewcriteriawidth}|}{较熟练运用本专业设计或研究的方法、手段和工具开展课题的设计与研究工作} &
     \levelScoreThreeA & \levelScoreThreeB & \levelScoreThreeC & \levelScoreThreeD \\
     \cline{2-8}
-    & \multicolumn{3}{p{11.28cm}|}{已基本掌握了专业技能和研究方法，有一定的实践能力和水平} &
+    & \multicolumn{3}{p{\reviewcriteriawidth}|}{已基本掌握了专业技能和研究方法，有一定的实践能力和水平} &
     \levelScoreFourA & \levelScoreFourB & \levelScoreFourC & \levelScoreFourD \\
     \cline{2-8}
-    & \multicolumn{3}{p{11.28cm}|}{(1)熟练使用软件完成论文的录入、排版，质量较高
+    & \multicolumn{3}{p{\reviewcriteriawidth}|}{(1)熟练使用软件完成论文的录入、排版，质量较高
 
     (2)能选用专业软件或相应软件进行编程或建模、分析等工作；编程或软件使用水平较高
 
@@ -309,47 +334,53 @@ _DOCUMENT_TEMPLATE = r"""\documentclass[UTF8]{article}
     } &
     \levelScoreFiveA & \levelScoreFiveB & \levelScoreFiveC & \levelScoreFiveD \\
     \cline{2-8}
-    & \multicolumn{3}{p{11.28cm}|}{(1)论文：基于选题的研究现状，进行科学的分析与综合，提出新问题，探索解决问题的方法、手段有一定的特色或新意；或有新见解
+    & \multicolumn{3}{p{\reviewcriteriawidth}|}{(1)论文：基于选题的研究现状，进行科学的分析与综合，提出新问题，探索解决问题的方法、手段有一定的特色或新意；或有新见解
     (2)设计：将专业知识、技能应用于实际问题的解决，方法或思路有一定的特色或创新} &
     \levelScoreSixA & \levelScoreSixB & \levelScoreSixC & \levelScoreSixD \\
     \hline
 
     \multirow{3}{*}{论文质量}
-    & \multicolumn{3}{p{11.28cm}|}{概念清楚，内容正确，数据可靠，论据较充分，论证较严密，结论基本正确} &
+    & \multicolumn{3}{p{\reviewcriteriawidth}|}{概念清楚，内容正确，数据可靠，论据较充分，论证较严密，结论基本正确} &
     \qualityScoreOneA & \qualityScoreOneB & \qualityScoreOneC & \qualityScoreOneD \\
     \cline{2-8}
-    & \multicolumn{3}{p{11.28cm}|}{能够完整地反映实际完成的工作，结构较严谨，语言通顺} &
+    & \multicolumn{3}{p{\reviewcriteriawidth}|}{能够完整地反映实际完成的工作，结构较严谨，语言通顺} &
     \qualityScoreTwoA & \qualityScoreTwoB & \qualityScoreTwoC & \qualityScoreTwoD \\
     \cline{2-8}
-    & \multicolumn{3}{p{11.28cm}|}{(1)论文：有一定的学术价值
+    & \multicolumn{3}{p{\reviewcriteriawidth}|}{(1)论文：有一定的学术价值
 
     (2)设计：有实物作品、实际运行的系统或具有一定复杂度的原型系统} &
     \qualityScoreThreeA & \qualityScoreThreeB & \qualityScoreThreeC & \qualityScoreThreeD \\
     \hline
 
     \hline
-    \multicolumn{4}{|p{13.51cm}|}{总体评价（给出百分制总评成绩：100-90为优秀；89-75为良好；74-60为合格；60分以下为不合格）} & \multicolumn{4}{c|}{\totalScore} \\
-    \hline
-    \multicolumn{8}{|p{17.05cm}|}{
-        \begin{minipage}[t][11.24cm][t]{\linewidth}
-            论文修改建议:
-            \par
-            \vspace*{0pt}
-
-
-            \suggestions
-            \vfill
-            ~
-        \end{minipage}
-    } \\
-    \hline
-    \multicolumn{8}{|r|}{
-        \autoyear \hspace{0.5em} 年\hspace{1em}
-        \automonth \hspace{0.5em} 月\hspace{1em}
-        \autoday \hspace{0.5em} 日\hspace{1em}
-    } \\
+    \multicolumn{4}{|p{\dimexpr13.51cm+4\tabcolsep+3\arrayrulewidth\relax}|}{总体评价（给出百分制总评成绩：100-90为优秀；89-75为良好；74-60为合格；60分以下为不合格）} & \multicolumn{4}{c|}{\totalScore} \\
     \hline
 \end{tabular}
+\par\nointerlineskip
+% A table cell/minipage cannot split across pages. Keep the suggestions in a
+% matching, breakable frame, with a closed border and heading on every page.
+\begin{tcolorbox}[
+    enhanced, breakable, width=\reviewtablewidth,
+    skin first=enhanced, skin middle=enhanced, skin last=enhanced,
+    sharp corners, boxrule=0.5pt,
+    colframe=black, colback=white, colbacktitle=white, coltitle=black,
+    boxsep=0pt, left=6pt, right=8pt, top=2mm, bottom=2mm,
+    toptitle=2mm, bottomtitle=1mm,
+    before skip=0pt, after skip=0pt, pad at break*=2mm,
+    % Padding resets the break rules, so restore them afterwards.
+    toprule at break=0.5pt, bottomrule at break=0.5pt,
+    fonttitle=\normalsize, title={论文修改建议:},
+    title after break={论文修改建议（续）:}
+]
+\raggedright
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.4\baselineskip}
+\setlength{\emergencystretch}{\linewidth}
+\suggestions
+\par\nobreak\medskip
+\hfill\mbox{\autoyear 年\hspace{1em}\automonth 月\hspace{1em}\autoday 日}
+\end{tcolorbox}
+\end{center}
 \end{document}
 """
 
@@ -374,19 +405,19 @@ def _score_commands(entries: list[ReviewTableEntry]) -> str:
 def _suggestions_block(data: ReviewTableData) -> str:
     """将按章节建议与综合意见排版为模板 suggestions 内容。"""
     blocks = [
-        rf"[{latex_escape(name)}] {latex_escape(remark)}"
+        rf"[{_wrappable_text(name)}] {_wrappable_text(remark)}"
         for name, remark in data.chapter_advice
     ]
     if data.advice_content:
-        blocks.append(latex_escape(data.advice_content))
+        blocks.append(_wrappable_text(data.advice_content))
     return "".join(r"\par " + block for block in blocks)
 
 
 def render_review_table(data: ReviewTableData) -> str:
     body = _DOCUMENT_TEMPLATE
-    body = body.replace("@STUDENT_ID@", latex_escape(data.student_no))
-    body = body.replace("@STUDENT_NAME@", latex_escape(data.student_name))
-    body = body.replace("@PAPER_TITLE@", latex_escape(data.paper_title))
+    body = body.replace("@STUDENT_ID@", _wrappable_text(data.student_no))
+    body = body.replace("@STUDENT_NAME@", _wrappable_text(data.student_name))
+    body = body.replace("@PAPER_TITLE@", _wrappable_text(data.paper_title))
     body = body.replace("@SCORE_COMMANDS@", _score_commands(list(data.entries)))
     body = body.replace("@TOTAL_SCORE@", str(int(data.total_score)))
     body = body.replace("@SUGGESTIONS@", _suggestions_block(data))
